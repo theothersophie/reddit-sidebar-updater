@@ -53,7 +53,7 @@ function updateSchedule() {
   var authData = UrlFetchApp.fetch('https://ssl.reddit.com/api/v1/access_token', {
     payload: {
       grant_type: 'password',
-      scope: 'wikiread,wikiedit',
+      scope: 'wikiread,wikiedit,read,history',
       username: USERNAME,
       password: PASSWORD
     },
@@ -104,9 +104,33 @@ function updateSchedule() {
       sidebarLength += tableLine.length
     }
   }
+var scriptData = scriptProperties.getProperties();
 
+  // Grab the newest question thread
+  if (!("Q_DATE" in scriptData) || (((now.getTime() / 1000) + 28740) - (scriptData.Q_DATE)) > 604800) {
+    // rate limiting
+    Utilities.sleep(2000);
+
+    var questionThreadData = UrlFetchApp.fetch('https://oauth.reddit.com/r/' + Naruto + '/search.json?q=author%3Aricardo1991+*episode*&restrict_sr=on&sort=new&t=all', {
+      headers: { 'Authorization': 'bearer ' + authToken, 'User-Agent': '/r/' + Naruto + ' sidebar updater. (Contact us via /r/' + Naruto + ' modmail)' }
+    });
+
+    questionThreadData = JSON.parse(questionThreadData);
+
+    var newestQuestionThread = questionThreadData.data.children[0].data;
+
+    scriptProperties.setProperties({
+      "Q_DATE": newestQuestionThread.created,
+      "Q_LINK": newestQuestionThread.url
+    });
+
+    scriptData = scriptProperties.getProperties();
+  }
+
+  var questionThreadDate = Utilities.formatDate(new Date(scriptData[ 'Q_DATE' ] * 1000 ), SCHEDULE_TIME_ZONE, 'MMMM dd, yyyy'),
+      questionThreadLink = scriptData[ 'Q_LINK' ];
   // update the sidebar! :)
-  var sidebar = template.replace('{{SCHEDULE}}', sidebarTable)
+  var sidebar = template.replace('{{SCHEDULE}}', sidebarTable)                         .replace(/\{\{Q_DATE\}\}/g, questionThreadDate)                         .replace(/\{\{Q_LINK\}\}/g, questionThreadLink)
   UrlFetchApp.fetch('https://oauth.reddit.com/r/' + SUBREDDIT + '/api/wiki/edit', {
     payload: {
       content: sidebar,
